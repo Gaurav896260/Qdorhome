@@ -1,55 +1,62 @@
-import React, { useState, useEffect } from 'react';
-import Navbar from '../../components/Navbar/Navbar.jsx'; // Adjust the path as necessary
-import Footer from '../../components/Footer/Footer.jsx'; // Adjust the path as necessary
-import AOS from 'aos';
-import 'aos/dist/aos.css';
-import { useParams, useNavigate } from 'react-router-dom';
+import image1 from "../../assets/Lifestyle/Globe/globe1.JPG";
+import image2 from "../../assets/Lifestyle/Globe/globe2.JPG";
+import image3 from "../../assets/Lifestyle/Globe/globe3.jpeg";
+import image4 from "../../assets/Lifestyle/Globe/globe4.jpeg";
+import image5 from "../../assets/objectDecor/globe3.png";
+import React, { useState, useEffect, useCallback } from "react";
+import Navbar from "../../components/Navbar/Navbar.jsx";
+import Footer from "../../components/Footer/Footer.jsx";
+import AOS from "aos";
+import { toast, ToastContainer } from "react-toastify";
+import "aos/dist/aos.css";
+import "react-toastify/dist/ReactToastify.css"; // Import toast styles
+import {
+  FaTruck,
+  FaMoneyBillAlt,
+  FaUndo,
+  FaBusinessTime,
+  FaChevronDown,
+} from "react-icons/fa";
+import { useSelector } from "react-redux";
+import { useParams, useNavigate } from "react-router-dom";
 
-import image1 from '../../assets/Lifestyle/Globe/globe1.JPG';
-import image2 from '../../assets/Lifestyle/Globe/globe2.JPG';
-import image3 from '../../assets/Lifestyle/Globe/globe3.jpeg';
-import image4 from '../../assets/Lifestyle/Globe/globe4.jpeg';
-import image5 from '../../assets/objectDecor/globe3.png';
-
-import { FaChevronDown, FaTruck, FaMoneyBillAlt, FaUndo, FaBusinessTime } from 'react-icons/fa';
-
-// Product images
+// Product images and data
 const productImages = {
-  'the-globe': [image1, image2, image3, image4, image5],
+  "the-globe": [image1, image2, image3, image4, image5],
 };
 
 const products = [
   {
-    id: 'the-globe',
-    name: 'THE GLOBE',
+    id: "the-globe",
+    name: "THE GLOBE",
     description: [
-      'A stunning piece crafted from Mild Steel',
-      'Radiating luxury with QH’s exclusive gold-plated finish.',
-      'Perfect for your bookshelf, office desk, coffee table, and more.',
-      'An ideal gift for anyone wanting to add a touch of sophistication to their studio, office, or home.',
+      "A stunning piece crafted from Mild Steel",
+      "Radiating luxury with QH’s exclusive gold-plated finish.",
+      "Perfect for your bookshelf, office desk, coffee table, and more.",
+      "An ideal gift for anyone wanting to add a touch of sophistication to their studio, office, or home.",
     ],
     price: 69.99,
-  }
+    imageUrl: "QmQsQfhocjAjHfoCdBQ5WnxdfqMPyc5KnZ3D2sS1FATkfV",
+  },
 ];
 
 const ObjectDecorProduct = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
+  const userInfo = useSelector((state) => state.auth.userInfo);
+
   const [activeProduct, setActiveProduct] = useState(
     () => products.find((product) => product.id === productId) || products[0]
   );
   const [activeImg, setActiveImage] = useState(
-    productImages[activeProduct.id][0]
+    productImages[activeProduct.id] ? productImages[activeProduct.id][0] : ""
   );
   const [amount, setAmount] = useState(1);
   const [showDescription, setShowDescription] = useState(false);
   const [showDimensions, setShowDimensions] = useState(false);
   const [showCareInstructions, setShowCareInstructions] = useState(false);
   const [showShipping, setShowShipping] = useState(false);
-
-  useEffect(() => {
-    setActiveImage(productImages[activeProduct.id][0]);
-  }, [activeProduct]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     AOS.init({
@@ -61,15 +68,129 @@ const ObjectDecorProduct = () => {
     AOS.refresh();
   }, []);
 
-  const handleBuyNow = () => {
-    navigate("/checkout"); // Navigate to the checkout page
+  useEffect(() => {
+    if (productImages[activeProduct.id]) {
+      setActiveImage(productImages[activeProduct.id][0]);
+    }
+  }, [activeProduct]);
+
+  const fetchUserData = async () => {
+    console.log(userInfo);
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/users/objectIdexport?fbUserId=${userInfo.fbUserId}`, // Assuming this retrieves MongoDB user
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${userInfo.token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch user data");
+      }
+
+      const data = await response.json(); // This should return MongoDB user data
+      return data;
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      setError("Error fetching user data: " + error.message);
+      return null;
+    }
+  };
+
+  const handleAddToCart = async () => {
+    console.log(userInfo);
+    const token = userInfo?.token;
+
+    if (!token) {
+      toast.error("Authentication token is missing.");
+      return;
+    }
+
+    // Fetch MongoDB user data
+    const userData = await fetchUserData();
+    if (!userData || !userData._id) {
+      toast.error("Failed to fetch user information.");
+      return;
+    }
+
+    const mongoUserId = userData._id; // Use MongoDB _id
+
+    try {
+      const response = await fetch("http://localhost:3000/api/cart", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: mongoUserId, // MongoDB user ID
+          productId: activeProduct.id,
+          name: activeProduct.name,
+          price: Number(activeProduct.price),
+          image: activeProduct.imageUrl,
+          quantity: amount,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add to cart");
+      }
+
+      toast.success("Product added to cart!");
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      toast.error("An unexpected error occurred. Please try again later.");
+    }
+  };
+
+  const handleBuyNow = async () => {
+    const userId = userInfo?._id;
+
+    if (!userId) {
+      console.error("User ID is missing");
+      alert("Please log in to purchase items.");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:3000/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userInfo.token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          productId: activeProduct.id,
+          name: activeProduct.name,
+          price: Number(activeProduct.price),
+          image: activeProduct.imageUrl,
+          quantity: amount,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
+      const data = await response.json();
+      console.log("Checkout successful:", data);
+      alert("Proceeding to checkout!");
+      navigate("/checkout");
+    } catch (error) {
+      console.error("Error during checkout:", error);
+      alert("Failed to proceed with the purchase. Please try again.");
+    }
   };
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
-
-      {/* Center the main content */}
+      <ToastContainer /> {/* Add ToastContainer for notifications */}
       <div className="flex flex-col items-center lg:items-start lg:flex-row gap-8 lg:gap-16 py-8 px-4 lg:px-20 mx-auto max-w-7xl">
         {/* Product Images Section */}
         <div className="flex flex-col lg:flex-row items-center lg:w-1/2 gap-4">
@@ -79,6 +200,10 @@ const ObjectDecorProduct = () => {
               src={activeImg}
               alt={activeProduct.name}
               className="w-full max-w-6xl h-auto object-cover rounded-lg shadow-lg"
+              onError={(e) => {
+                e.target.onerror = null; // prevents looping
+                e.target.src = "path/to/default/image.jpg"; // fallback image
+              }}
             />
           </div>
 
@@ -128,98 +253,25 @@ const ObjectDecorProduct = () => {
               </button>
             </div>
 
-            <button className="bg-black text-white font-semibold py-2 px-6 lg:py-3 lg:px-10 rounded-xl">
+            <button
+              onClick={handleAddToCart}
+              className="bg-black text-white font-semibold py-2 px-6 lg:py-3 lg:px-10 rounded-xl"
+            >
               Add to Cart
             </button>
 
             <button
               onClick={handleBuyNow}
-              className="bg-gray-900 text-white font-semibold py-2 px-6 lg:py-3 lg:px-10 rounded-xl"
+              className="bg-green-500 text-white font-semibold py-2 px-6 lg:py-3 lg:px-10 rounded-xl"
             >
               Buy Now
             </button>
           </div>
-
-          {/* Shipping and Features Icons */}
-          <div className="flex justify-around items-center py-4 bg-gray-100 rounded-lg">
-            <IconFeature icon={<FaTruck />} text="Free Delivery" />
-            <IconFeature icon={<FaMoneyBillAlt />} text="Cash on Delivery" />
-            <IconFeature icon={<FaUndo />} text="7 Days Return" />
-            <IconFeature icon={<FaBusinessTime />} text="1-2 Days Dispatch" />
-          </div>
-
-          {/* Collapsible Sections */}
-          <div className="mt-8 w-full">
-            <CollapsibleSection
-              title="Description"
-              isOpen={showDescription}
-              toggle={() => setShowDescription((prev) => !prev)}
-            >
-              <ul className="text-gray-700 text-sm lg:text-base list-disc list-inside">
-                {activeProduct.description.map((line, index) => (
-                  <li key={index}>{line}</li>
-                ))}
-              </ul>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Dimensions & Material"
-              isOpen={showDimensions}
-              toggle={() => setShowDimensions((prev) => !prev)}
-            >
-              <p className="text-gray-700 text-sm lg:text-base">
-                Dimensions: 12" x 8" x 6"
-              </p>
-              <p className="text-gray-700 text-sm lg:text-base">Material: Steel</p>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Care Instructions"
-              isOpen={showCareInstructions}
-              toggle={() => setShowCareInstructions((prev) => !prev)}
-            >
-              <p className="text-gray-700 text-sm lg:text-base">
-                Clean with a dry cloth.
-              </p>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Shipping & Returns"
-              isOpen={showShipping}
-              toggle={() => setShowShipping((prev) => !prev)}
-            >
-              <p className="text-gray-700 text-sm lg:text-base">
-                Free shipping available. Returns accepted within 7 days.
-              </p>
-            </CollapsibleSection>
-          </div>
         </div>
       </div>
-
       <Footer />
     </div>
   );
 };
-
-const CollapsibleSection = ({ title, isOpen, toggle, children }) => (
-  <div className="my-4">
-    <div className="flex items-center cursor-pointer" onClick={toggle}>
-      <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-      {isOpen ? (
-        <FaChevronDown className="ml-2 text-gray-600" />
-      ) : (
-        <FaChevronDown className="ml-2 text-gray-600" />
-      )}
-    </div>
-    {isOpen && <div className="mt-2">{children}</div>}
-  </div>
-);
-
-const IconFeature = ({ icon, text }) => (
-  <div className="flex flex-col items-center">
-    {icon}
-    <span className="text-sm text-gray-700">{text}</span>
-  </div>
-);
 
 export default ObjectDecorProduct;

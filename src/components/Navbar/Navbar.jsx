@@ -2,8 +2,15 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "../../assets/logoImp.png";
 import { IoMdSearch } from "react-icons/io";
-import { FaCartShopping, FaUser, FaBars, FaChevronDown } from "react-icons/fa6";
+import {
+  FaCartPlus,
+  FaUser,
+  FaBars,
+  FaChevronDown,
+  FaUserCircle,
+} from "react-icons/fa";
 import DarkMode from "./DarkMode";
+import { useSelector } from "react-redux";
 
 const Menu = [
   { id: 0, name: "Our Collection", link: "/ourCollection" },
@@ -47,6 +54,9 @@ const Navbar = ({ handleOrderPopup }) => {
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
   const navigate = useNavigate();
 
+  const { userInfo } = useSelector((state) => state.auth);
+  const isLoggedIn = !!userInfo;
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTextIndex((prevIndex) =>
@@ -62,25 +72,26 @@ const Navbar = ({ handleOrderPopup }) => {
     setMenuOpen(false);
   };
 
-  const toggleDropdown = (id) => {
-    setActiveDropdown((prev) => (prev === id ? null : id));
+  const handleProfileClick = () => {
+    if (isLoggedIn) {
+      navigate("/profile");
+    } else {
+      navigate("/auth");
+    }
   };
 
   return (
     <div className="sticky top-0 z-40 bg-black dark:bg-black dark:text-white">
-      {/* Top Navbar with changing text */}
       <div className="bg-black py-2 text-center text-white text-xl font-roboto font-normal">
         <p>{changingTexts[currentTextIndex]}</p>
       </div>
 
       <div className="shadow-md duration-200">
-        {/* Upper Navbar */}
         <div
           className="bg-black py-2 flex items-center justify-between"
           style={{ height: "70px" }}
         >
           <div className="container flex justify-between items-center relative mx-auto px-4">
-            {/* Left section with search button */}
             <div className="flex items-center gap-4">
               <div className="relative group">
                 <IoMdSearch
@@ -97,7 +108,6 @@ const Navbar = ({ handleOrderPopup }) => {
               </div>
             </div>
 
-            {/* Centered Logo */}
             <div className="flex justify-center absolute inset-x-0 mx-auto">
               <a
                 onClick={() => handleNavigation("/")}
@@ -116,9 +126,7 @@ const Navbar = ({ handleOrderPopup }) => {
               </a>
             </div>
 
-            {/* Right Section: Cart, User, and Dark Mode */}
             <div className="flex items-center gap-4">
-              {/* Order button */}
               <button
                 onClick={() => handleNavigation("/cart")}
                 className="bg-gradient-to-r from-golden-yellow to-golden-orange transition-all duration-200 text-white py-1 px-4 rounded-full flex items-center gap-3 group"
@@ -126,18 +134,21 @@ const Navbar = ({ handleOrderPopup }) => {
                 <span className="group-hover:block hidden transition-all duration-200">
                   Order
                 </span>
-                <FaCartShopping className="text-xl text-white drop-shadow-sm cursor-pointer" />
+                <FaCartPlus className="text-xl text-white drop-shadow-sm cursor-pointer" />
               </button>
 
-              {/* User Icon for Login/Signup */}
               <button
-                onClick={() => handleNavigation("/auth")}
+                onClick={handleProfileClick}
                 className="text-white transition-all duration-200 py-1 px-4 rounded-full flex items-center gap-3 group"
               >
-                <FaUser className="text-xl drop-shadow-sm cursor-pointer" />
+                {isLoggedIn ? (
+                  <FaUserCircle className="text-xl drop-shadow-sm cursor-pointer" />
+                ) : (
+                  <FaUser className="text-xl drop-shadow-sm cursor-pointer" />
+                )}
+                <span>{isLoggedIn ? "" : ""}</span>
               </button>
 
-              {/* Darkmode Switch */}
               <div>
                 <DarkMode />
               </div>
@@ -145,72 +156,66 @@ const Navbar = ({ handleOrderPopup }) => {
           </div>
         </div>
 
-        {/* Lower Navbar with "Shop All" items */}
-        {/* Lower Navbar with "Shop All" items */}
-<div className="bg-white flex justify-center p-2 sm:p-0">
-  <ul className="sm:flex hidden items-center gap-4">
-    {Menu.map((data) => (
-      <li
-        key={data.id}
-        className={`relative group ${
-          data.subMenu ? "hover:bg-gray-100" : ""
-        }`}
-        onMouseEnter={() => data.subMenu && setActiveDropdown(data.id)}
-        onMouseLeave={() => setActiveDropdown(null)}
-      >
-        <a
-          onClick={() =>
-            data.subMenu
-              ? toggleDropdown(data.id)
-              : handleNavigation(data.link)
-          }
-          className="inline-block px-4 text-black text-2xl font-roboto relative cursor-pointer transform transition-transform hover:scale-105 flex items-center"
-        >
-          {data.name}
-          {data.subMenu && (
-            <FaChevronDown
-              className={`ml-2 transition-transform ${
-                activeDropdown === data.id ? "rotate-180" : ""
-              }`}
-            />
-          )}
-        </a>
-        {data.subMenu && activeDropdown === data.id && (
-          <ul
-            className="absolute bg-white shadow-lg rounded-lg top-full mt-1 w-40"
-            // Add these event handlers to ensure dropdown stays visible while hovering over it
-            onMouseEnter={() => setActiveDropdown(data.id)}
-            onMouseLeave={() => setActiveDropdown(null)}
-          >
-            {data.subMenu.map((subItem, index) => (
-              <li key={index} className="hover:bg-gray-200">
+        <div className="bg-white flex justify-center p-2 sm:p-0">
+          <ul className="sm:flex hidden items-center gap-4">
+            {Menu.map((data) => (
+              <li
+                key={data.id}
+                className={`relative group ${
+                  data.subMenu ? "hover:bg-gray-100" : ""
+                }`}
+                onMouseEnter={() => data.subMenu && setActiveDropdown(data.id)}
+                onMouseLeave={() => setActiveDropdown(null)}
+              >
                 <a
-                  onClick={() => handleNavigation(subItem.link)}
-                  className="block px-4 py-2 text-black hover:text-golden-yellow duration-200 text-base font-roboto"
+                  onClick={() =>
+                    data.subMenu
+                      ? toggleDropdown(data.id)
+                      : handleNavigation(data.link)
+                  }
+                  className="inline-block px-4 text-black text-2xl font-roboto relative cursor-pointer transform transition-transform hover:scale-105 flex items-center"
                 >
-                  {subItem.name}
+                  {data.name}
+                  {data.subMenu && (
+                    <FaChevronDown
+                      className={`ml-2 transition-transform ${
+                        activeDropdown === data.id ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
                 </a>
+                {data.subMenu && activeDropdown === data.id && (
+                  <ul
+                    className="absolute bg-white shadow-lg rounded-lg top-full mt-1 w-40"
+                    onMouseEnter={() => setActiveDropdown(data.id)}
+                    onMouseLeave={() => setActiveDropdown(null)}
+                  >
+                    {data.subMenu.map((subItem, index) => (
+                      <li key={index} className="hover:bg-gray-200">
+                        <a
+                          onClick={() => handleNavigation(subItem.link)}
+                          className="block px-4 py-2 text-black hover:text-golden-yellow duration-200 text-base font-roboto"
+                        >
+                          {subItem.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
-        )}
-      </li>
-    ))}
-  </ul>
 
-  {/* Menubar button for small screens */}
-  <div className="sm:hidden flex items-center">
-    <button
-      className="text-black focus:outline-none"
-      onClick={() => setMenuOpen(!menuOpen)}
-    >
-      <FaBars className="text-2xl" />
-    </button>
-  </div>
-</div>
+          <div className="sm:hidden flex items-center">
+            <button
+              className="text-black focus:outline-none"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              <FaBars className="text-2xl" />
+            </button>
+          </div>
+        </div>
 
-
-        {/* Dropdown menu for small screens */}
         {menuOpen && (
           <div className="bg-white sm:hidden flex flex-col items-start p-4 shadow-md">
             {Menu.map((data) => (

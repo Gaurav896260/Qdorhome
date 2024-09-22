@@ -1,96 +1,336 @@
-import React, { useState } from 'react';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import Navbar from '../components/Navbar/Navbar.jsx';
-import Footer from '../components/Footer/Footer.jsx';
+import React, { useState, useEffect, useRef } from "react";
+import axios from "axios";
+import {
+  auth,
+  signInWithPhoneNumber,
+  GoogleAuthProvider,
+  signInWithPopup,
+  RecaptchaVerifier,
+} from "../../backend/controllers/firebaseController.js";
+import { parsePhoneNumber, isValidNumber } from "libphonenumber-js";
+import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { setCredentials } from "../redux/slices/authSlice";
+import "./auth.css";
+import Navbar from "../components/Navbar/Navbar.jsx";
+import Footer from "../components/Footer/Footer.jsx";
 
 const Auth = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [confirmResult, setConfirmResult] = useState(null);
+  const [countryCode, setCountryCode] = useState("us");
+  const recaptchaVerifierRef = useRef(null);
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const currentAuthState = useSelector((state) => state.auth);
 
-  const toggleSignUp = () => setIsSignUp(!isSignUp);
-  const togglePasswordVisibility = () => setShowPassword(!showPassword);
+  useEffect(() => {
+    console.log("Component mounted. Initializing reCAPTCHA...");
+    initializeRecaptcha();
+
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        console.log("Component unmounting. Cleaning up reCAPTCHA...");
+        recaptchaVerifierRef.current.clear();
+        recaptchaVerifierRef.current = null;
+      }
+    };
+  }, []);
+
+  const initializeRecaptcha = () => {
+    console.log("Initializing RecaptchaVerifier...");
+    if (!recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current = new RecaptchaVerifier(
+          auth,
+          "recaptcha-container",
+          {
+            size: "invisible",
+            callback: (response) => {
+              console.log("reCAPTCHA solved successfully. Response:", response);
+            },
+            "expired-callback": () => {
+              console.log("reCAPTCHA expired. Reinitializing...");
+              initializeRecaptcha();
+            },
+          }
+        );
+        console.log("RecaptchaVerifier initialized successfully.");
+      } catch (error) {
+        console.error("Error initializing RecaptchaVerifier:", error);
+      }
+    } else {
+      console.log("RecaptchaVerifier already initialized.");
+    }
+  };
+
+  useEffect(() => {
+    if (phoneNumber) {
+      console.log("Parsing phone number:", phoneNumber);
+      try {
+        const phoneNumberParsed = parsePhoneNumber(phoneNumber, "IN");
+        const newCountryCode =
+          phoneNumberParsed?.country?.toLowerCase() || "us";
+        console.log("Parsed country code:", newCountryCode);
+        setCountryCode(newCountryCode);
+      } catch (error) {
+        console.error("Error parsing phone number:", error);
+        setCountryCode("us");
+      }
+    }
+  }, [phoneNumber]);
+
+  const formatPhoneNumber = (number) => {
+    console.log("Formatting phone number:", number);
+    try {
+      if (number.length < 10) {
+        console.log("Phone number too short");
+        return null;
+      }
+      const phoneNumberParsed = parsePhoneNumber(number, "IN");
+      const validNumber = isValidNumber(phoneNumberParsed.number);
+      console.log(
+        "Formatted phone number:",
+        validNumber ? phoneNumberParsed.number : "Invalid number"
+      );
+      return validNumber ? phoneNumberParsed.number : null;
+    } catch (error) {
+      console.error("Error formatting phone number:", error);
+      return null;
+    }
+  };
+
+  const handlePhoneChange = (e) => {
+    console.log("Phone number input changed:", e.target.value);
+    setPhoneNumber(e.target.value);
+  };
+  // Updated requestOTP function
+  const requestOTP = async () => {
+    console.log("Requesting OTP for phone number:", phoneNumber);
+
+    try {
+      const formattedPhoneNumber = formatPhoneNumber(phoneNumber);
+      if (!formattedPhoneNumber) {
+        console.error("Invalid phone number");
+        // Show an error message to the user
+        return;
+      }
+
+      console.log(
+        "Formatted phone number ready for OTP:",
+        formattedPhoneNumber
+      );
+
+      // Check if the phone number exists in the database
+      const response = await axios.get(
+        `http://localhost:3000/api/users/phone/${encodeURIComponent(
+          formattedPhoneNumber
+        )}`
+      );
+
+      const phoneExists = response.data.exists;
+
+      if (phoneExists) {
+        console.log("Phone number exists in database. Dispatching user data.");
+        const userData = response.data.user; // Assuming the user data is returned in response.data.user
+        console.log("User Data:", userData);
+        // Dispatch the user data to Redux
+        dispatch(setCredentials(userData));
+
+        // Navigate to the home page
+        navigate("/");
+      } else {
+        console.log("Phone number not found, proceeding with OTP request...");
+
+        // Initialize reCAPTCHA if not already done
+        if (!recaptchaVerifierRef.current) {
+          console.error("reCAPTCHA not initialized");
+          await initializeRecaptcha();
+          if (!recaptchaVerifierRef.current) {
+            throw new Error("Failed to initialize reCAPTCHA");
+          }
+        }
+
+        const appVerifier = recaptchaVerifierRef.current;
+        console.log("Starting signInWithPhoneNumber...");
+        const confirmationResult = await signInWithPhoneNumber(
+          auth,
+          formattedPhoneNumber,
+          appVerifier
+        );
+        setConfirmResult(confirmationResult);
+        console.log(
+          "OTP sent successfully, confirmationResult:",
+          confirmationResult
+        );
+
+        // Redirect to the complete profile page to create a new account
+        navigate("/completeProfile", {
+          state: { phone: formattedPhoneNumber }, // Optionally pass phone number to the next page
+        });
+      }
+    } catch (error) {
+      console.error("Error during OTP request:", error);
+      if (recaptchaVerifierRef.current) {
+        console.log("Clearing and reinitializing reCAPTCHA due to error.");
+        recaptchaVerifierRef.current.clear();
+        recaptchaVerifierRef.current = null;
+      }
+      await initializeRecaptcha();
+      // Show an error message to the user
+    }
+  };
+
+  // Updated verifyOTP function
+  const verifyOTP = async () => {
+    console.log("Verifying OTP:", verificationCode);
+
+    if (!confirmResult) {
+      console.error("No confirmResult available");
+      return;
+    }
+
+    try {
+      const result = await confirmResult.confirm(verificationCode);
+      console.log("Phone number verified successfully. Result:", result);
+
+      const userInfo = {
+        displayName: null,
+        phone: result.user.phoneNumber,
+        fbUserId: result.user.uid, // Changed from _id to fbUserId for clarity
+      };
+
+      // New user, proceed to CompleteProfile
+      dispatch(setCredentials(userInfo));
+      navigate("/completeProfile", {
+        state: { phone: userInfo.phone, fbUserId: userInfo.fbUserId },
+      });
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
+      // Show an error message to the user
+    }
+  };
+  const handleGoogleSignIn = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      console.log("Google Sign-In successful. Result:", result.user);
+
+      const { uid, displayName, email } = result.user;
+
+      if (!uid || !email) {
+        console.error("User ID or email is missing.");
+        return;
+      }
+
+      // Get the access token using getIdToken
+      const accessToken = await result.user.getIdToken();
+
+      // Check if the user exists in your database
+      try {
+        const response = await axios.get(
+          `http://localhost:3000/api/users/email/${encodeURIComponent(email)}`
+        );
+
+        if (response.data && response.data.user) {
+          // User exists, dispatch credentials with token and navigate to home
+          dispatch(
+            setCredentials({
+              ...response.data.user,
+              token: accessToken, // Include the access token here
+            })
+          );
+          navigate("/");
+        } else {
+          // User doesn't exist, redirect to add phone number
+          console.log("User does not exist, redirecting to addPhone...");
+          const userInfo = {
+            _id: uid,
+            displayName: displayName || "User",
+            email: email,
+            token: accessToken,
+          };
+
+          navigate("/addPhone", { state: { user: userInfo } });
+        }
+      } catch (error) {
+        if (error.response && error.response.status === 404) {
+          // User doesn't exist, redirect to add phone number
+          console.log(
+            "User not found in the database, redirecting to addPhone..."
+          );
+          const userInfo = {
+            _id: uid,
+            displayName: displayName || "User",
+            email: email,
+            token: accessToken,
+          };
+          navigate("/addPhone", { state: { user: userInfo } });
+        } else {
+          console.error("Error checking user in database:", error);
+          // Handle other errors appropriately
+        }
+      }
+    } catch (error) {
+      console.error("Error during Google Sign-In:", error.message);
+      // Show an error message to the user
+    }
+  };
 
   return (
-    <div className='bg-white dark:bg-gray-900 dark:text-white'>
+    <>
       <Navbar />
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">
-            {isSignUp ? 'Sign Up' : 'Sign In'}
-          </h2>
-          <form className="space-y-6">
-            {isSignUp && (
-              <div>
-                <label className="block text-gray-700 dark:text-gray-200 mb-2" htmlFor="username">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  id="username"
-                  className="w-full px-4 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2"
-                  placeholder="Username"
-                  required
-                />
-              </div>
-            )}
-            <div>
-              <label className="block text-gray-700 dark:text-gray-200 mb-2" htmlFor="email">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                className="w-full px-4 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 "
-                placeholder="Email"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 dark:text-gray-200 mb-2" htmlFor="password">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  className="w-full px-4 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 "
-                  placeholder="Password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={togglePasswordVisibility}
-                  className="absolute inset-y-0 right-3 flex items-center"
-                >
-                  {showPassword ? (
-                    <FaEyeSlash className="text-gray-500 dark:text-gray-400" />
-                  ) : (
-                    <FaEye className="text-gray-500 dark:text-gray-400" />
-                  )}
-                </button>
-              </div>
-            </div>
-            <button
-              type="submit"
-              className="w-full py-2 px-4 bg-black text-white rounded-md transition-transform transform hover:scale-105"
-            >
-              {isSignUp ? 'Sign Up' : 'Sign In'}
-            </button>
-          </form>
-          <p className="mt-4 text-center text-gray-600 dark:text-gray-400">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-            <button
-              type="button"
-              onClick={toggleSignUp}
-              className="text-blue font-semibold ml-1"
-            >
-              {isSignUp ? 'Sign In' : 'Sign Up'}
-            </button>
-          </p>
+      <div className="signup-container">
+        <h1 className="title">Login with OTP</h1>
+        <p className="subtitle">Enter your log in details</p>
+        <div className="input-container">
+          <div className="country-flag">
+            <img
+              src={`https://flagcdn.com/w20/${countryCode}.png`}
+              alt="Country flag"
+              onError={(e) => {
+                console.log(
+                  "Error loading flag image, falling back to US flag"
+                );
+                e.target.onerror = null;
+                e.target.src = `https://flagcdn.com/w20/us.png`;
+              }}
+              style={{ width: "30px", height: "20px" }}
+            />
+          </div>
+          <input
+            className="phone-input"
+            type="text"
+            placeholder="Phone number"
+            value={phoneNumber}
+            onChange={handlePhoneChange}
+          />
         </div>
+        <button className="request-otp-button" onClick={requestOTP}>
+          Request OTP
+        </button>
+        {confirmResult && (
+          <div>
+            <input
+              type="text"
+              placeholder="Enter OTP"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+            />
+            <button onClick={verifyOTP}>Verify OTP</button>
+          </div>
+        )}
+        <div className="divider">Or Login Using</div>
+        <div className="login-options">
+          <button className="google-login" onClick={handleGoogleSignIn}>
+            <i className="fab fa-google"></i> Sign in with Google
+          </button>
+        </div>
+        <div id="recaptcha-container"></div>
       </div>
-      <Footer/>
-    </div>
+      <Footer />
+    </>
   );
 };
 

@@ -1,131 +1,282 @@
-import React, { useState } from 'react';
-import Navbar from '../components/Navbar/Navbar.jsx'; // Adjust the path as necessary
-import Footer from '../components/Footer/Footer.jsx'; // Adjust the path as necessary
+import React, { useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { logout } from "../redux/slices/authSlice.js";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import {
+  User,
+  MapPin,
+  Package,
+  LogOut,
+  Edit,
+  Plus,
+  ArrowRight,
+} from "lucide-react";
 
 const MyProfile = () => {
-  const [user, setUser] = useState({
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    mobile: '123-456-7890',
-  });
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const userInfo = useSelector((state) => state.auth.userInfo);
 
-  const [addresses, setAddresses] = useState([
-    {
-      id: 1,
-      address: '123 Main St, Springfield, IL',
-    },
-    {
-      id: 2,
-      address: '456 Elm St, Springfield, IL',
-    },
-  ]);
+  const [addresses, setAddresses] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [userDetails, setUserDetails] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("profile");
 
-  const [newAddress, setNewAddress] = useState('');
+  useEffect(() => {
+    if (userInfo && userInfo._id) {
+      fetchUserDetails(userInfo._id);
+      fetchUserOrders(userInfo._id);
+    } else {
+      navigate("/auth");
+    }
+  }, [userInfo, navigate]);
+
+  const fetchUserDetails = async (userId) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:3000/api/users/user-details/${userId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${userInfo.token}`,
+          },
+        }
+      );
+      const userData = response.data;
+      setUserDetails(userData);
+      setAddresses(userData.addresses || []);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error fetching user details:", error);
+      toast.error("Failed to load user details");
+      setLoading(false);
+    }
+  };
+
+  const fetchUserOrders = async (userId) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:3000/api/users/orders/${userId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${userInfo.token}`,
+          },
+        }
+      );
+      setOrders(response.data || []);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      toast.error("Failed to load orders");
+    }
+  };
+
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate("/auth");
+    toast.success("Logged out successfully");
+  };
+
+  const handleOrderClick = (orderId) => {
+    navigate(`/order/${orderId}`);
+  };
+
+  const handleEditProfile = () => {
+    // Implement edit profile functionality
+    toast.info("Edit profile feature coming soon!");
+  };
 
   const handleAddAddress = () => {
-    setAddresses([
-      ...addresses,
-      { id: addresses.length + 1, address: newAddress },
-    ]);
-    setNewAddress('');
+    // Implement add address functionality
+    toast.info("Add address feature coming soon!");
   };
 
-  const handleEditAddress = (id, updatedAddress) => {
-    setAddresses(
-      addresses.map((address) =>
-        address.id === id ? { ...address, address: updatedAddress } : address
-      )
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
     );
-  };
-
-  const handleChange = (e) => {
-    setUser({
-      ...user,
-      [e.target.name]: e.target.value,
-    });
-  };
+  }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Navbar />
+    <div className="min-h-screen bg-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-4xl font-bold mb-8 text-gray-800">My Profile</h1>
 
-      <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-4">My Profile</h1>
-        <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Personal Details</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
-              <input
-                type="text"
-                name="name"
-                value={user.name}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={user.email}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Mobile</label>
-              <input
-                type="text"
-                name="mobile"
-                value={user.mobile}
-                onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Saved Addresses</h2>
-          <div className="mb-4">
-            {addresses.map((address) => (
-              <div key={address.id} className="flex justify-between items-center mb-2">
-                <span>{address.address}</span>
-                <button
-                  onClick={() => handleEditAddress(address.id, prompt('Edit Address', address.address))}
-                  className="bg-black text-white px-2 py-1 rounded"
-                >
-                  Edit
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center mb-4">
-            <input
-              type="text"
-              value={newAddress}
-              onChange={(e) => setNewAddress(e.target.value)}
-              placeholder="New Address"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            />
+        <div className="bg-white shadow-xl rounded-lg overflow-hidden">
+          <div className="flex border-b">
             <button
-              onClick={handleAddAddress}
-              className="ml-2 bg-black text-white px-4 py-2 rounded"
+              className={`flex-1 py-4 px-6 text-center ${
+                activeTab === "profile"
+                  ? "bg-blue-500 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+              onClick={() => setActiveTab("profile")}
             >
-              Add
+              <User className="inline-block mr-2" /> Profile
+            </button>
+            <button
+              className={`flex-1 py-4 px-6 text-center ${
+                activeTab === "addresses"
+                  ? "bg-blue-500 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+              onClick={() => setActiveTab("addresses")}
+            >
+              <MapPin className="inline-block mr-2" /> Addresses
+            </button>
+            <button
+              className={`flex-1 py-4 px-6 text-center ${
+                activeTab === "orders"
+                  ? "bg-blue-500 text-white"
+                  : "text-gray-600 hover:bg-gray-100"
+              }`}
+              onClick={() => setActiveTab("orders")}
+            >
+              <Package className="inline-block mr-2" /> Orders
             </button>
           </div>
+
+          <div className="p-6">
+            {activeTab === "profile" && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-semibold text-gray-800">
+                    Welcome, {userDetails.username || userInfo.username}!
+                  </h2>
+                  <button
+                    onClick={handleEditProfile}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 transition duration-300 flex items-center"
+                  >
+                    <Edit className="mr-2" size={18} /> Edit Profile
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={userDetails.email || userInfo.email || "N/A"}
+                      readOnly
+                      className="w-full p-3 rounded-lg bg-gray-100 text-gray-700 border border-gray-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      Mobile
+                    </label>
+                    <input
+                      type="text"
+                      value={userDetails.mobile || userInfo.mobile || "N/A"}
+                      readOnly
+                      className="w-full p-3 rounded-lg bg-gray-100 text-gray-700 border border-gray-300"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "addresses" && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-semibold text-gray-800">
+                    Saved Addresses
+                  </h2>
+                  <button
+                    onClick={handleAddAddress}
+                    className="bg-green-500 text-white px-4 py-2 rounded-full hover:bg-green-600 transition duration-300 flex items-center"
+                  >
+                    <Plus className="mr-2" size={18} /> Add New Address
+                  </button>
+                </div>
+                {addresses.length > 0 ? (
+                  addresses.map((address, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-gray-50 p-4 rounded-lg mb-4 shadow"
+                    >
+                      <p className="font-semibold text-lg text-gray-800 mb-2">
+                        {address.isDefault
+                          ? "Default Address"
+                          : `Address ${idx + 1}`}
+                      </p>
+                      <p className="text-gray-600">{address.addressLine1}</p>
+                      <p className="text-gray-600">{address.addressLine2}</p>
+                      <p className="text-gray-600">
+                        {address.city}, {address.state} - {address.pincode}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500">
+                    No addresses found. Add a new address to get started!
+                  </p>
+                )}
+              </div>
+            )}
+
+            {activeTab === "orders" && (
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-800 mb-6">
+                  Your Orders
+                </h2>
+                {orders.length > 0 ? (
+                  orders.map((order) => (
+                    <div
+                      key={order._id}
+                      className="bg-gray-50 p-4 rounded-lg mb-6 shadow"
+                    >
+                      <p className="font-semibold text-lg text-gray-800 mb-2">
+                        Order #{order._id.slice(-6)}
+                      </p>
+                      <p className="text-gray-600 mb-2">
+                        Date: {new Date(order.createdAt).toLocaleDateString()}
+                      </p>
+                      <div className="flex flex-wrap gap-4 mb-4">
+                        {order.products.map((product) => (
+                          <div key={product._id} className="flex items-center">
+                            <img
+                              src={`https://ipfs.io/ipfs/${product.image}`}
+                              alt={product.name}
+                              className="w-16 h-16 object-cover rounded-lg mr-4 shadow"
+                            />
+                            <span className="text-gray-700 font-medium">
+                              {product.name}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 transition duration-300 flex items-center"
+                        onClick={() => handleOrderClick(order._id)}
+                      >
+                        View Details <ArrowRight className="ml-2" size={18} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500">
+                    No orders found. Start shopping to see your orders here!
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="bg-white shadow-md rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-4">Other Details</h2>
-          {/* Add other details here */}
-        </div>
+        <button
+          onClick={handleLogout}
+          className="mt-8 bg-red-500 text-white px-6 py-3 rounded-full shadow hover:bg-red-600 transition duration-300 flex items-center"
+        >
+          <LogOut className="mr-2" size={18} /> Logout
+        </button>
       </div>
-
-      <Footer />
+      <ToastContainer position="bottom-right" />
     </div>
   );
 };
